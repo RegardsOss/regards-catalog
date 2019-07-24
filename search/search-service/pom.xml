@@ -50,7 +50,7 @@
 	<parent>
 		<groupId>fr.cnes.regards.modules</groupId>
 		<artifactId>search</artifactId>
-		<version>0.4.0</version>
+		<version>0.4.1</version>
 	</parent>
 
 	<dependencies>
@@ -63,8 +63,8 @@
 			<artifactId>dam-client</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>fr.cnes.regards.modules.notification</groupId>
-			<artifactId>notification-client</artifactId>
+			<groupId>fr.cnes.regards.framework</groupId>
+			<artifactId>notification-regards-starter</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>fr.cnes.regards.modules.search</groupId>
