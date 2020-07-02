@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
@@ -36,6 +37,8 @@ import org.springframework.hateoas.Link;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+
+import com.google.common.collect.Sets;
 
 import feign.FeignException;
 import fr.cnes.regards.framework.feign.security.FeignSecurityManager;
@@ -168,9 +171,7 @@ public class DescriptionBuilder {
 
     /**
      * Build metadata of the {@link OpenSearchDescription}
-     * @param project {@link Project}
      * @param dataset
-     * @param attributes {@link AttributeModel}s attributes
      * @return
      */
     private OpenSearchDescription buildMetadata(EngineConfiguration engineConf, Optional<EntityFeature> dataset) {
@@ -229,7 +230,6 @@ public class DescriptionBuilder {
     /**
      * Build a {@link QueryType} for the given {@link AttributeModel}s.
      * The generate query is an example to shox syntax of the global searchTerms
-     * @param attributes {@link AttributeModel}s to handle in the query
      * @return {@link QueryType}
      */
     private QueryType buildQuery(List<DescriptionParameter> descParameters) {
@@ -243,7 +243,6 @@ public class DescriptionBuilder {
     /**
      * Build {@link OpenSearchParameter}s to add for the parameter extension in each {@link UrlType} of the
      * {@link OpenSearchDescription}
-     * @param attributes {@link Map} {@link AttributeModel} / {@link QueryableAttribute}
      * @param extensions {@link IOpenSearchExtension}s to apply on parameters
      * @return generated {@link OpenSearchParameter}s
      */
@@ -289,8 +288,6 @@ public class DescriptionBuilder {
 
     /**
      * Build a {@link OpenSearchParameter} for a given {@link AttributeModel}
-     * @param attribute {@link AttributeModel} to build parameter from.
-     * @param queryableAtt {@link QueryableAttribute} attribute query informations.
      * @param extensions {@link IOpenSearchExtension} opensearch extensions to handle.
      * @return
      */
@@ -352,14 +349,16 @@ public class DescriptionBuilder {
         List<DescriptionParameter> parameters = Lists.newArrayList();
 
         // For each attribute retrieve the QueryableAttribute informations
-        List<QueryableAttribute> queryableAttributes = Lists.newArrayList();
+        Set<QueryableAttribute> queryableAttributes = Sets.newHashSet();
         for (ModelAttrAssoc maa : getModelAttributes(context)) {
             Optional<ParameterConfiguration> conf = parameterConfs.stream()
                     .filter(pc -> pc.getAttributeModelJsonPath().equals(maa.getAttribute().getJsonPath())).findFirst();
             QueryableAttribute queryableAtt = createEmptyQueryableAttribute(maa.getAttribute(), conf);
-            queryableAttributes.add(queryableAtt);
-            parameters.add(new DescriptionParameter(finder.findName(maa.getAttribute()), maa.getAttribute(),
-                    conf.orElse(null), queryableAtt));
+            if (!queryableAttributes.contains(queryableAtt)) {
+                queryableAttributes.add(queryableAtt);
+                parameters.add(new DescriptionParameter(finder.findName(maa.getAttribute()), maa.getAttribute(),
+                        conf.orElse(null), queryableAtt));
+            }
         }
         try {
             // Run statistic search on each attributes. Results are set back into the QueryableAttributes parameter.
@@ -368,7 +367,6 @@ public class DescriptionBuilder {
             LOGGER.error("Error retrieving properties for each parameters of the OpenSearchDescription (parameter extension",
                          e);
         }
-
         return parameters;
     }
 
@@ -411,9 +409,9 @@ public class DescriptionBuilder {
 
         // Set aggregation stats conf if present
         if (conf.isPresent()) {
-            return new QueryableAttribute(name, null, att.isTextAttribute(), conf.get().getOptionsCardinality());
+            return new QueryableAttribute(name, null, att.isTextAttribute(), conf.get().getOptionsCardinality(), att.isBooleanAttribute());
         } else {
-            return new QueryableAttribute(name, null, att.isTextAttribute(), 0);
+            return new QueryableAttribute(name, null, att.isTextAttribute(), 0, att.isBooleanAttribute());
         }
     }
 
@@ -430,8 +428,6 @@ public class DescriptionBuilder {
                 return EntityType.DATA;
             case DATASETS:
                 return EntityType.DATASET;
-            case DOCUMENTS:
-                return EntityType.DOCUMENT;
             case ALL:
             case DATAOBJECTS_RETURN_DATASETS:
             default:

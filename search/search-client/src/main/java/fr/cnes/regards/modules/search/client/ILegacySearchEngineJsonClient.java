@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -57,6 +57,4 @@ public interface ILegacySearchEngineJsonClient {
     @RequestMapping(method = RequestMethod.GET, value = SearchEngineMappings.SEARCH_DATASETS_MAPPING)
     ResponseEntity<JsonObject> searchDatasets(@RequestParam MultiValueMap<String, String> allParams);
 
-    @RequestMapping(method = RequestMethod.GET, value = SearchEngineMappings.SEARCH_DOCUMENTS_MAPPING)
-    ResponseEntity<JsonObject> searchDocuments(@RequestParam MultiValueMap<String, String> allParams);
 }

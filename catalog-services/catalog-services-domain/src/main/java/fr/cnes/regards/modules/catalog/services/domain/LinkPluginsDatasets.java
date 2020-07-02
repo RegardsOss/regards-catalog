@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -53,14 +53,14 @@ import fr.cnes.regards.modules.catalog.services.domain.annotations.PluginService
         name = "uk_link_service_dataset_dataset_id"))
 public class LinkPluginsDatasets {
 
-    /**
-     * Id of the dataset which is concerned by this mapping
-     */
     @Id
     @SequenceGenerator(name = "linkServiceSequence", initialValue = 1, sequenceName = "seq_link_service_dataset")
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "linkServiceSequence")
     private Long linkId;
 
+    /**
+     * Id of the dataset which is concerned by this mapping
+     */
     @NotNull
     @Column(name = "dataset_id", nullable = false, length = 256)
     private String datasetId;

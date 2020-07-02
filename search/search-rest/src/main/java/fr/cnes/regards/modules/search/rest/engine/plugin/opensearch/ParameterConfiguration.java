@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -45,7 +45,7 @@ public class ParameterConfiguration {
     /**
      * Opensearch parameter namespace
      */
-    @PluginParameter(name = "namespace", label = "Namespace of the exntesion parameter",
+    @PluginParameter(name = "namespace", label = "Namespace of the extension parameter",
             description = "Namespace that will be handled by opensearch parameters extensions. Example in time extension the parameter {time:start} namespace is time")
     private String namespace;
 

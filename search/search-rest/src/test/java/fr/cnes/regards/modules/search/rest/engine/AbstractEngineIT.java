@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -47,13 +47,13 @@ import fr.cnes.regards.framework.geojson.geometry.IGeometry;
 import fr.cnes.regards.framework.geojson.geometry.Polygon;
 import fr.cnes.regards.framework.module.rest.exception.ModuleException;
 import fr.cnes.regards.framework.modules.plugins.domain.PluginConfiguration;
-import fr.cnes.regards.framework.modules.plugins.domain.PluginParameter;
+import fr.cnes.regards.framework.modules.plugins.domain.parameter.IPluginParam;
 import fr.cnes.regards.framework.modules.plugins.service.IPluginService;
 import fr.cnes.regards.framework.oais.urn.DataType;
 import fr.cnes.regards.framework.oais.urn.EntityType;
 import fr.cnes.regards.framework.oais.urn.UniformResourceName;
 import fr.cnes.regards.framework.test.integration.AbstractRegardsTransactionalIT;
-import fr.cnes.regards.framework.utils.plugins.PluginParametersFactory;
+import fr.cnes.regards.framework.utils.plugins.PluginParameterTransformer;
 import fr.cnes.regards.framework.utils.plugins.PluginUtils;
 import fr.cnes.regards.modules.accessrights.client.IProjectUsersClient;
 import fr.cnes.regards.modules.dam.client.models.IAttributeModelClient;
@@ -62,7 +62,6 @@ import fr.cnes.regards.modules.dam.domain.entities.AbstractEntity;
 import fr.cnes.regards.modules.dam.domain.entities.Collection;
 import fr.cnes.regards.modules.dam.domain.entities.DataObject;
 import fr.cnes.regards.modules.dam.domain.entities.Dataset;
-import fr.cnes.regards.modules.dam.domain.entities.Document;
 import fr.cnes.regards.modules.dam.domain.entities.attribute.builder.AttributeBuilder;
 import fr.cnes.regards.modules.dam.domain.models.Model;
 import fr.cnes.regards.modules.dam.domain.models.attributes.AttributeModel;
@@ -222,10 +221,6 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         relativeUrlPaths.add(SearchEngineMappings.SEARCH_COLLECTIONS_MAPPING_EXTRA);
         relativeUrlPaths.add(SearchEngineMappings.GET_COLLECTION_MAPPING);
 
-        relativeUrlPaths.add(SearchEngineMappings.SEARCH_DOCUMENTS_MAPPING);
-        relativeUrlPaths.add(SearchEngineMappings.SEARCH_DOCUMENTS_MAPPING_EXTRA);
-        relativeUrlPaths.add(SearchEngineMappings.GET_DOCUMENT_MAPPING);
-
         relativeUrlPaths.add(SearchEngineMappings.SEARCH_DATASETS_MAPPING);
         relativeUrlPaths.add(SearchEngineMappings.SEARCH_DATASETS_MAPPING_EXTRA);
         relativeUrlPaths.add(SearchEngineMappings.GET_DATASET_MAPPING);
@@ -345,12 +340,18 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         engineConfiguration.setImage("http://plop/image.png");
         engineConfiguration.setEntityLastUpdateDatePropertyPath("TimePeriod.startDate");
 
-        Set<PluginParameter> parameters = PluginParametersFactory.build()
-                .addParameter(OpenSearchEngine.TIME_EXTENSION_PARAMETER, geoTime)
-                .addParameter(OpenSearchEngine.REGARDS_EXTENSION_PARAMETER, regardsExt)
-                .addParameter(OpenSearchEngine.MEDIA_EXTENSION_PARAMETER, mediaExt)
-                .addParameter(OpenSearchEngine.PARAMETERS_CONFIGURATION, paramConfigurations)
-                .addParameter(OpenSearchEngine.ENGINE_PARAMETERS, engineConfiguration).getParameters();
+        Set<IPluginParam> parameters = IPluginParam
+                .set(IPluginParam.build(OpenSearchEngine.TIME_EXTENSION_PARAMETER,
+                                        PluginParameterTransformer.toJson(geoTime)),
+                     IPluginParam.build(OpenSearchEngine.REGARDS_EXTENSION_PARAMETER,
+                                        PluginParameterTransformer.toJson(regardsExt)),
+                     IPluginParam.build(OpenSearchEngine.MEDIA_EXTENSION_PARAMETER,
+                                        PluginParameterTransformer.toJson(mediaExt)),
+                     IPluginParam.build(OpenSearchEngine.PARAMETERS_CONFIGURATION,
+                                        PluginParameterTransformer.toJson(paramConfigurations)),
+                     IPluginParam.build(OpenSearchEngine.ENGINE_PARAMETERS,
+                                        PluginParameterTransformer.toJson(engineConfiguration)));
+
         PluginConfiguration opensearchConf = PluginUtils.getPluginConfiguration(parameters, OpenSearchEngine.class);
         openSearchPluginConf = pluginService.savePluginConfiguration(opensearchConf);
         SearchEngineConfiguration seConfOS = new SearchEngineConfiguration();
@@ -420,21 +421,35 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
     protected DataObject createMercury(Model planetModel) {
         DataObject planet = createPlanet(planetModel, MERCURY, PLANET_TYPE_TELLURIC, 4878, 58_000_000L);
 
-        planet.setDatasetModelIds(Sets.newHashSet(99L));
+        planet.setDatasetModelNames(Sets.newHashSet(planetModel.getName()));
 
-        DataFile quicklook = new DataFile();
-        quicklook.setMimeType(MimeType.valueOf("application/jpg"));
-        quicklook.setUri(URI.create("http://regards/le_quicklook.jpg"));
-        quicklook.setReference(false);
-        quicklook.setImageWidth(100);
-        quicklook.setImageHeight(100);
-        planet.getFiles().put(DataType.QUICKLOOK_SD, quicklook);
+        DataFile quicklooksd = new DataFile();
+        quicklooksd.setMimeType(MimeType.valueOf("application/jpg"));
+        quicklooksd.setUri(URI.create("http://regards/le_quicklook_sd.jpg"));
+        quicklooksd.setReference(false);
+        quicklooksd.setImageWidth(100d);
+        quicklooksd.setImageHeight(100d);
+        planet.getFiles().put(DataType.QUICKLOOK_SD, quicklooksd);
+        DataFile quicklookmd = new DataFile();
+        quicklookmd.setMimeType(MimeType.valueOf("application/jpg"));
+        quicklookmd.setUri(URI.create("http://regards/le_quicklook_md.jpg"));
+        quicklookmd.setReference(false);
+        quicklookmd.setImageWidth(100d);
+        quicklookmd.setImageHeight(100d);
+        planet.getFiles().put(DataType.QUICKLOOK_MD, quicklookmd);
+        DataFile quicklookhd = new DataFile();
+        quicklookhd.setMimeType(MimeType.valueOf("application/jpg"));
+        quicklookhd.setUri(URI.create("http://regards/le_quicklook_hd.jpg"));
+        quicklookhd.setReference(false);
+        quicklookhd.setImageWidth(100d);
+        quicklookhd.setImageHeight(100d);
+        planet.getFiles().put(DataType.QUICKLOOK_HD, quicklookhd);
 
         DataFile thumbnail = new DataFile();
         thumbnail.setMimeType(MimeType.valueOf("application/png"));
         thumbnail.setUri(URI.create("http://regards/thumbnail.png"));
-        thumbnail.setImageWidth(250);
-        thumbnail.setImageHeight(250);
+        thumbnail.setImageWidth(250d);
+        thumbnail.setImageHeight(250d);
         thumbnail.setReference(false);
         planet.getFiles().put(DataType.THUMBNAIL, thumbnail);
 
@@ -502,9 +517,6 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
                 break;
             case DATASET:
                 entity = new Dataset(model, getDefaultTenant(), label, label);
-                break;
-            case DOCUMENT:
-                entity = new Document(model, getDefaultTenant(), label, label);
                 break;
             default:
                 throw new UnsupportedOperationException("Unknown entity type " + model.getType());

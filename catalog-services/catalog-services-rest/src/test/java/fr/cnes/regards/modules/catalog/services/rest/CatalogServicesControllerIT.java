@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -39,8 +39,8 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.ResultActions;
@@ -52,20 +52,22 @@ import com.google.common.collect.Sets;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 
-import fr.cnes.regards.framework.jpa.multitenant.transactional.MultitenantTransactional;
 import fr.cnes.regards.framework.module.rest.exception.ModuleException;
+import fr.cnes.regards.framework.modules.plugins.annotations.Plugin;
+import fr.cnes.regards.framework.modules.plugins.dao.IPluginConfigurationRepository;
 import fr.cnes.regards.framework.modules.plugins.domain.PluginConfiguration;
 import fr.cnes.regards.framework.modules.plugins.domain.PluginMetaData;
-import fr.cnes.regards.framework.modules.plugins.domain.PluginParameter;
+import fr.cnes.regards.framework.modules.plugins.domain.parameter.IPluginParam;
 import fr.cnes.regards.framework.modules.plugins.service.IPluginService;
+import fr.cnes.regards.framework.multitenant.IRuntimeTenantResolver;
 import fr.cnes.regards.framework.oais.urn.EntityType;
 import fr.cnes.regards.framework.security.utils.HttpConstants;
 import fr.cnes.regards.framework.test.integration.AbstractRegardsTransactionalIT;
 import fr.cnes.regards.framework.test.integration.RequestBuilderCustomizer;
 import fr.cnes.regards.framework.test.report.annotation.Purpose;
 import fr.cnes.regards.framework.test.report.annotation.Requirement;
-import fr.cnes.regards.framework.utils.plugins.PluginParametersFactory;
 import fr.cnes.regards.framework.utils.plugins.PluginUtils;
+import fr.cnes.regards.modules.catalog.services.dao.ILinkPluginsDatasetsRepository;
 import fr.cnes.regards.modules.catalog.services.domain.LinkPluginsDatasets;
 import fr.cnes.regards.modules.catalog.services.domain.ServicePluginParameters;
 import fr.cnes.regards.modules.catalog.services.domain.ServiceScope;
@@ -76,10 +78,10 @@ import fr.cnes.regards.modules.catalog.services.service.link.ILinkPluginsDataset
 /**
  * @author Sylvain Vissiere-Guerinet
  */
-@DirtiesContext
+@AutoConfigureMockMvc(printOnlyOnFailure = true)
 @TestPropertySource(locations = "classpath:test.properties")
 @ContextConfiguration(classes = { CatalogServicesITConfiguration.class })
-@MultitenantTransactional
+@Ignore("Error in spring-test dependency fixed in 5.2.0. https://github.com/spring-projects/spring-framework/issues/23460")
 public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(CatalogServicesControllerIT.class);
@@ -98,6 +100,15 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
     @Autowired
     private ILinkPluginsDatasetsService linkService;
 
+    @Autowired
+    private ILinkPluginsDatasetsRepository linkDsRepo;
+
+    @Autowired
+    private IPluginConfigurationRepository pluginConfRepo;
+
+    @Autowired
+    private IRuntimeTenantResolver tenantResolver;
+
     private PluginConfiguration conf;
 
     private PluginConfiguration samplePlgConf;
@@ -107,11 +118,17 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         return LOG;
     }
 
+    private void clearDb() {
+        linkDsRepo.deleteAll();
+        pluginConfRepo.deleteAll();
+    }
+
     @Before
     public void init() throws ModuleException {
+        tenantResolver.forceTenant(getDefaultTenant());
+        this.clearDb();
         LOG.info("--------------------> Initialization <-------------------------------------");
-        Set<PluginParameter> parameters = PluginParametersFactory.build().addDynamicParameter("para", "never used")
-                .getParameters();
+        Set<IPluginParam> parameters = IPluginParam.set(IPluginParam.build("para", "never used").dynamic());
         final PluginMetaData metaData = new PluginMetaData();
         metaData.setPluginId("tata");
         metaData.setAuthor("toto");
@@ -122,19 +139,18 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         // Create two plugin services linked to the same dataset
         // 1. first one
         if (!pluginService.findPluginConfigurationByLabel("testConf").isPresent()) {
-            conf = new PluginConfiguration(metaData, "testConf", parameters);
+            conf = new PluginConfiguration("testConf", parameters, metaData.getPluginId());
             conf = pluginService.savePluginConfiguration(conf);
         } else {
             LOG.warn("----------------------------------> Conf already exists for initialization");
         }
         // 2. second one
         if (!pluginService.findPluginConfigurationByLabel(PLUGIN_CONF_LABEL_1).isPresent()) {
-            parameters = PluginParametersFactory.build()
-                    .addDynamicParameter(SampleServicePlugin.RESPONSE_TYPE_PARAMETER,
-                                         SampleServicePlugin.RESPONSE_TYPE_JSON)
-                    .getParameters();
-            samplePlgConf = new PluginConfiguration(PluginUtils.createPluginMetaData(SampleServicePlugin.class),
-                    PLUGIN_CONF_LABEL_1, parameters);
+            parameters = IPluginParam.set(IPluginParam
+                    .build(SampleServicePlugin.RESPONSE_TYPE_PARAMETER, SampleServicePlugin.RESPONSE_TYPE_JSON)
+                    .dynamic());
+            samplePlgConf = new PluginConfiguration(
+                    PLUGIN_CONF_LABEL_1, parameters, SampleServicePlugin.class.getAnnotation(Plugin.class).id());
             pluginService.savePluginConfiguration(samplePlgConf);
         } else {
             LOG.warn("----------------------------------> Conf already exists for initialization {}",
@@ -150,11 +166,10 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         metaData2.getInterfaceNames().add(IService.class.getName());
         metaData2.setPluginClassName(TestService.class.getName());
 
-        parameters = PluginParametersFactory.build().addDynamicParameter(SampleServicePlugin.RESPONSE_TYPE_PARAMETER,
-                                                                         SampleServicePlugin.RESPONSE_TYPE_JSON)
-                .getParameters();
+        parameters = IPluginParam.set(IPluginParam
+                .build(SampleServicePlugin.RESPONSE_TYPE_PARAMETER, SampleServicePlugin.RESPONSE_TYPE_JSON).dynamic());
         PluginConfiguration samplePlgConf2 = new PluginConfiguration(
-                PluginUtils.createPluginMetaData(SampleServicePlugin.class), PLUGIN_CONF_LABEL_2, parameters);
+                PLUGIN_CONF_LABEL_2, parameters, SampleServicePlugin.class.getAnnotation(Plugin.class).id());
         pluginService.savePluginConfiguration(samplePlgConf2);
 
         linkService.updateLink(DATA_SET_NAME,
@@ -228,7 +243,7 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         requestBuilderCustomizer.addHeaders(getHeadersToApply());
         ResultActions resultActions = performDefaultPost(CatalogServicesController.PATH_SERVICES
                 + CatalogServicesController.PATH_SERVICE_NAME, parameters, requestBuilderCustomizer,
-                                                         "there should not be any error", conf.getId());
+                                                         "there should not be any error", conf.getBusinessId());
         validateTestPluginResponse(resultActions, new File("src/test/resources/result.json"));
     }
 
@@ -278,7 +293,7 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         requestBuilderCustomizer.addHeaders(getHeadersToApply());
         ResultActions resultActions = performDefaultPost(CatalogServicesController.PATH_SERVICES
                 + CatalogServicesController.PATH_SERVICE_NAME, parameters, requestBuilderCustomizer,
-                                                         "there should not be any error", conf.getId());
+                                                         "there should not be any error", conf.getBusinessId());
         validateTestPluginResponse(resultActions, new File("src/test/resources/result_empty.json"));
     }
 

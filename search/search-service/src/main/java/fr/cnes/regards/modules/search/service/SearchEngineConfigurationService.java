@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -45,16 +45,12 @@ import fr.cnes.regards.framework.module.rest.exception.EntityInvalidException;
 import fr.cnes.regards.framework.module.rest.exception.EntityNotFoundException;
 import fr.cnes.regards.framework.module.rest.exception.EntityOperationForbiddenException;
 import fr.cnes.regards.framework.module.rest.exception.ModuleException;
-import fr.cnes.regards.framework.modules.locks.domain.Lock;
-import fr.cnes.regards.framework.modules.locks.domain.LockException;
 import fr.cnes.regards.framework.modules.locks.service.ILockService;
+import fr.cnes.regards.framework.modules.plugins.domain.PluginConfiguration;
+import fr.cnes.regards.framework.modules.plugins.domain.parameter.IPluginParam;
 import fr.cnes.regards.framework.modules.plugins.service.IPluginService;
 import fr.cnes.regards.framework.multitenant.IRuntimeTenantResolver;
-import fr.cnes.regards.framework.notification.NotificationLevel;
-import fr.cnes.regards.framework.notification.client.INotificationClient;
 import fr.cnes.regards.framework.oais.urn.UniformResourceName;
-import fr.cnes.regards.framework.security.role.DefaultRole;
-import fr.cnes.regards.framework.utils.plugins.PluginParametersFactory;
 import fr.cnes.regards.framework.utils.plugins.PluginUtils;
 import fr.cnes.regards.modules.dam.client.entities.IDatasetClient;
 import fr.cnes.regards.modules.dam.domain.entities.Dataset;
@@ -75,6 +71,13 @@ public class SearchEngineConfigurationService implements ISearchEngineConfigurat
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SearchEngineConfigurationService.class);
 
+    /**
+     * Name of the lock used in this service
+     */
+    public static final String SEARCH_ENGINE_LOCK_NAME = "initDefaultSearchEngine";
+
+    public static final String LEGACY_SEARCH_ENGINE_BUSINESS_ID = "search-engine-legacy";
+
     @Autowired
     private ISearchEngineConfRepository repository;
 
@@ -93,9 +96,6 @@ public class SearchEngineConfigurationService implements ISearchEngineConfigurat
     @Autowired
     private ILockService lockService;
 
-    @Autowired
-    private INotificationClient noticationClient;
-
     @PostConstruct
     public void listenForDatasetEvents() {
         // Subscribe to entity events in order to delete links to deleted dataset.
@@ -104,20 +104,8 @@ public class SearchEngineConfigurationService implements ISearchEngineConfigurat
 
     @Override
     public void initDefaultSearchEngine(Class<?> legacySearchEnginePluginClass) {
-        Lock lock = null;
-        try {
-            lock = lockService.lock(new Lock("initDefaultSearchEngine", this.getClass()), 10L);
-        } catch (LockException e) {
-            // lock could not be acquired, mainly because thread was interrupted while sleeping. Lets log and do nothing
-            LOGGER.error("Default search engine could not be initialized.", e);
-            noticationClient.notify(
-                                    "You can initialize it by going to relevant part of HMI. Plugin type: \"legacy\"."
-                                            + " Select use this search protocol for every search on catalog.",
-                                    "Default search engine could not be initialized", NotificationLevel.INFO,
-                                    DefaultRole.ADMIN);
-        }
         // if the lock is null it means it could not be acquired
-        if (lock != null) {
+        if (lockService.obtainLockOrSkip(SEARCH_ENGINE_LOCK_NAME, this, 10L)) {
             try {
                 // Initialize the mandatory legacy searchengine if it does not exists yet.
                 SearchEngineConfiguration conf = repository
@@ -126,9 +114,11 @@ public class SearchEngineConfigurationService implements ISearchEngineConfigurat
                     // Create the new one
                     conf = new SearchEngineConfiguration();
                     conf.setLabel("REGARDS search protocol");
-                    conf.setConfiguration(PluginUtils
-                            .getPluginConfiguration(PluginParametersFactory.build().getParameters(),
-                                                    legacySearchEnginePluginClass));
+                    PluginConfiguration pluginConf = PluginUtils.getPluginConfiguration(IPluginParam.set(),
+                                                                                        legacySearchEnginePluginClass);
+                    pluginConf.setBusinessId(LEGACY_SEARCH_ENGINE_BUSINESS_ID);
+                    pluginConf.setLabel(LEGACY_SEARCH_ENGINE_BUSINESS_ID);
+                    conf.setConfiguration(pluginConf);
                     try {
                         createConf(conf);
                     } catch (ModuleException e) {
@@ -136,7 +126,7 @@ public class SearchEngineConfigurationService implements ISearchEngineConfigurat
                     }
                 }
             } finally {
-                lockService.release(lock);
+                lockService.releaseLock(SEARCH_ENGINE_LOCK_NAME, this);
             }
         }
     }
@@ -179,7 +169,7 @@ public class SearchEngineConfigurationService implements ISearchEngineConfigurat
         Page<SearchEngineConfiguration> otherConfs = repository
                 .findByConfigurationId(confToDelete.getConfiguration().getId(), PageRequest.of(0, 1));
         if (otherConfs.getContent().isEmpty()) {
-            pluginService.deletePluginConfiguration(confToDelete.getConfiguration().getId());
+            pluginService.deletePluginConfiguration(confToDelete.getConfiguration().getBusinessId());
         }
 
     }

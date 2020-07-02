@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
+ * Copyright 2017-2020 CNES - CENTRE NATIONAL d'ETUDES SPATIALES
  *
  * This file is part of REGARDS.
  *
@@ -237,8 +237,9 @@ public class SearchContext {
             // Filter spring pagination parameters if any
             MultiValueMap<String, String> queryParamsPaginationLess = new LinkedMultiValueMap<>();
             queryParamsPaginationLess.putAll(queryParams);
-            // queryParamsPaginationLess.remove("page");
-            // queryParamsPaginationLess.remove("size");
+            // Remove authentication parameters if any
+            queryParamsPaginationLess.remove("token");
+            queryParamsPaginationLess.remove("scope");
             queryParamsPaginationLess.remove(SearchEngineMappings.SEARCH_REQUEST_PARSER);
             context.setQueryParams(queryParamsPaginationLess);
         }
