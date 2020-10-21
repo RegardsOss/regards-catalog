@@ -41,11 +41,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.google.common.collect.Iterables;
 
 import fr.cnes.regards.framework.module.rest.exception.ModuleException;
-import fr.cnes.regards.framework.oais.urn.DataType;
-import fr.cnes.regards.framework.oais.urn.EntityType;
-import fr.cnes.regards.framework.oais.urn.UniformResourceName;
 import fr.cnes.regards.framework.security.annotation.ResourceAccess;
 import fr.cnes.regards.framework.security.role.DefaultRole;
+import fr.cnes.regards.framework.urn.DataType;
+import fr.cnes.regards.framework.urn.EntityType;
+import fr.cnes.regards.framework.urn.UniformResourceName;
 import fr.cnes.regards.modules.dam.domain.entities.AbstractEntity;
 import fr.cnes.regards.modules.dam.domain.entities.DataObject;
 import fr.cnes.regards.modules.indexer.dao.FacetPage;
@@ -115,8 +115,8 @@ public class AccessRightController {
             FacetPage<DataObject> page = searchService.search(criterion, Searches.onSingleEntity(EntityType.DATA), null,
                                                               PageRequest.of(0, urns.size()));
             urnsWithAccess.addAll(page.getContent().parallelStream()
-                    .filter(dataObject -> dataObject.getFiles().containsKey(DataType.RAWDATA)).map(DataObject::getIpId)
-                    .collect(Collectors.toSet()));
+                    .filter(dataObject -> dataObject.getFiles().containsKey(DataType.RAWDATA))
+                    .map(dataObject -> dataObject.getIpId()).collect(Collectors.toSet()));
         }
         return ResponseEntity.ok(urnsWithAccess);
     }

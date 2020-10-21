@@ -32,14 +32,14 @@ import org.springframework.util.MultiValueMap;
 import com.google.common.collect.Lists;
 
 import fr.cnes.regards.framework.jpa.multitenant.transactional.MultitenantTransactional;
-import fr.cnes.regards.framework.oais.urn.DataType;
-import fr.cnes.regards.framework.oais.urn.EntityType;
 import fr.cnes.regards.framework.test.integration.RequestBuilderCustomizer;
+import fr.cnes.regards.framework.urn.DataType;
+import fr.cnes.regards.framework.urn.EntityType;
 import fr.cnes.regards.modules.search.domain.ComplexSearchRequest;
 import fr.cnes.regards.modules.search.domain.SearchRequest;
 import fr.cnes.regards.modules.search.rest.ComplexSearchController;
-import fr.cnes.regards.modules.search.rest.engine.plugin.legacy.LegacySearchEngine;
-import fr.cnes.regards.modules.search.rest.engine.plugin.opensearch.OpenSearchEngine;
+import fr.cnes.regards.modules.search.service.engine.plugin.legacy.LegacySearchEngine;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.OpenSearchEngine;
 
 @TestPropertySource(locations = { "classpath:test.properties" }, properties = { "regards.tenant=complex_search",
         "spring.jpa.properties.hibernate.default_schema=complex_search" })
@@ -69,8 +69,19 @@ public class ComplexSeachControllerIT extends AbstractEngineIT {
         ComplexSearchRequest request = new ComplexSearchRequest(Lists.newArrayList(DataType.values()));
         RequestBuilderCustomizer customizer = customizer().expectStatusOk();
         // Should be 2 for the legacy request on planet type
-        customizer.expect(MockMvcResultMatchers.jsonPath("$.metadata.totalElements", Matchers.equalTo(9)));
+        customizer.expect(MockMvcResultMatchers.jsonPath("$.metadata.totalElements", Matchers.equalTo(11)));
         performDefaultPost(ComplexSearchController.TYPE_MAPPING, request, customizer, "Search all error");
+    }
+
+    @Test
+    public void searchAtttributes() {
+        SearchRequest request = createSearchRequest(LegacySearchEngine.PLUGIN_ID, astroObjects.get(SOLAR_SYSTEM)
+                .getIpId().toString(), "q", String.format("%s:%s", PLANET_TYPE, protect(PLANET_TYPE_GAS_GIANT)));
+        RequestBuilderCustomizer customizer = customizer().expectStatusOk();
+        // Should be 7 attributes associated to model planet result of the dataobject search
+        customizer.expect(MockMvcResultMatchers.jsonPath("$", Matchers.hasSize(7)));
+        performDefaultPost(ComplexSearchController.TYPE_MAPPING + ComplexSearchController.SEARCH_DATAOBJECTS_ATTRIBUTES,
+                           request, customizer, "Search all error");
     }
 
     @Test
@@ -154,7 +165,7 @@ public class ComplexSeachControllerIT extends AbstractEngineIT {
                                          Lists.newArrayList(astroObjects.get(JUPITER).getIpId().toString())));
         RequestBuilderCustomizer customizer = customizer().expectStatusOk();
         // Should be 9 for the legacy all request (-1) for excluded id of jupiter
-        customizer.expect(MockMvcResultMatchers.jsonPath("$.metadata.totalElements", Matchers.equalTo(8)));
+        customizer.expect(MockMvcResultMatchers.jsonPath("$.metadata.totalElements", Matchers.equalTo(10)));
         performDefaultPost(ComplexSearchController.TYPE_MAPPING, request, customizer, "Search all error");
     }
 
@@ -163,7 +174,7 @@ public class ComplexSeachControllerIT extends AbstractEngineIT {
         ComplexSearchRequest request = new ComplexSearchRequest(Lists.newArrayList(DataType.values()));
         RequestBuilderCustomizer customizer = customizer().expectStatusOk();
         // Should be 2 for the legacy request on planet type
-        customizer.expect(MockMvcResultMatchers.jsonPath("$.documentsCount", Matchers.equalTo(9)));
+        customizer.expect(MockMvcResultMatchers.jsonPath("$.documentsCount", Matchers.equalTo(11)));
         customizer.expect(MockMvcResultMatchers.jsonPath("$.filesCount", Matchers.equalTo(1)));
         customizer.expect(MockMvcResultMatchers.jsonPath("$.filesSize", Matchers.equalTo(10)));
         performDefaultPost(ComplexSearchController.TYPE_MAPPING + ComplexSearchController.SUMMARY_MAPPING, request,

@@ -34,7 +34,6 @@ import java.util.Set;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,13 +59,12 @@ import fr.cnes.regards.framework.modules.plugins.domain.PluginMetaData;
 import fr.cnes.regards.framework.modules.plugins.domain.parameter.IPluginParam;
 import fr.cnes.regards.framework.modules.plugins.service.IPluginService;
 import fr.cnes.regards.framework.multitenant.IRuntimeTenantResolver;
-import fr.cnes.regards.framework.oais.urn.EntityType;
 import fr.cnes.regards.framework.security.utils.HttpConstants;
 import fr.cnes.regards.framework.test.integration.AbstractRegardsTransactionalIT;
 import fr.cnes.regards.framework.test.integration.RequestBuilderCustomizer;
 import fr.cnes.regards.framework.test.report.annotation.Purpose;
 import fr.cnes.regards.framework.test.report.annotation.Requirement;
-import fr.cnes.regards.framework.utils.plugins.PluginUtils;
+import fr.cnes.regards.framework.urn.EntityType;
 import fr.cnes.regards.modules.catalog.services.dao.ILinkPluginsDatasetsRepository;
 import fr.cnes.regards.modules.catalog.services.domain.LinkPluginsDatasets;
 import fr.cnes.regards.modules.catalog.services.domain.ServicePluginParameters;
@@ -81,7 +79,6 @@ import fr.cnes.regards.modules.catalog.services.service.link.ILinkPluginsDataset
 @AutoConfigureMockMvc(printOnlyOnFailure = true)
 @TestPropertySource(locations = "classpath:test.properties")
 @ContextConfiguration(classes = { CatalogServicesITConfiguration.class })
-@Ignore("Error in spring-test dependency fixed in 5.2.0. https://github.com/spring-projects/spring-framework/issues/23460")
 public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(CatalogServicesControllerIT.class);
@@ -149,8 +146,8 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
             parameters = IPluginParam.set(IPluginParam
                     .build(SampleServicePlugin.RESPONSE_TYPE_PARAMETER, SampleServicePlugin.RESPONSE_TYPE_JSON)
                     .dynamic());
-            samplePlgConf = new PluginConfiguration(
-                    PLUGIN_CONF_LABEL_1, parameters, SampleServicePlugin.class.getAnnotation(Plugin.class).id());
+            samplePlgConf = new PluginConfiguration(PLUGIN_CONF_LABEL_1, parameters,
+                    SampleServicePlugin.class.getAnnotation(Plugin.class).id());
             pluginService.savePluginConfiguration(samplePlgConf);
         } else {
             LOG.warn("----------------------------------> Conf already exists for initialization {}",
@@ -168,8 +165,8 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
 
         parameters = IPluginParam.set(IPluginParam
                 .build(SampleServicePlugin.RESPONSE_TYPE_PARAMETER, SampleServicePlugin.RESPONSE_TYPE_JSON).dynamic());
-        PluginConfiguration samplePlgConf2 = new PluginConfiguration(
-                PLUGIN_CONF_LABEL_2, parameters, SampleServicePlugin.class.getAnnotation(Plugin.class).id());
+        PluginConfiguration samplePlgConf2 = new PluginConfiguration(PLUGIN_CONF_LABEL_2, parameters,
+                SampleServicePlugin.class.getAnnotation(Plugin.class).id());
         pluginService.savePluginConfiguration(samplePlgConf2);
 
         linkService.updateLink(DATA_SET_NAME,
@@ -257,11 +254,15 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
             resultActions.andReturn().getAsyncResult();
             InputStream is = new ByteArrayInputStream(resultActions.andReturn().getResponse().getContentAsByteArray());
             ByteStreams.copy(is, fos);
+            fos.flush();
             is.close();
         }
+        System.out.printf("--------- %s", resultFile.getAbsolutePath());
         logFileContent(resultFile);
+        System.out.println("---------");
         logFileContent(expectedFileResult);
-        Assert.assertTrue("Request result is not valid", Files.equal(expectedFileResult, resultFile));
+        System.out.println("---------");
+        Assert.assertTrue("Request result is not valid", Files.equal(resultFile, expectedFileResult));
     }
 
     private void logFileContent(File file) {
@@ -298,7 +299,6 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
     }
 
     @Test
-    @Ignore("Random success of test.")
     public void testSampleServiceWithJsonResponse() throws IOException {
 
         HashMap<String, String> dynamicParameters = new HashMap<>();
@@ -312,12 +312,12 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         requestBuilderCustomizer.addHeaders(getHeadersToApply());
         ResultActions resultActions = performDefaultPost(CatalogServicesController.PATH_SERVICES
                 + CatalogServicesController.PATH_SERVICE_NAME, parameters, requestBuilderCustomizer,
-                                                         "there should not be any error", samplePlgConf.getId());
+                                                         "there should not be any error",
+                                                         samplePlgConf.getBusinessId());
         validateTestPluginResponse(resultActions, new File("src/test/resources/samplePluginResult.json"));
     }
 
     @Test
-    @Ignore("Random success of test.")
     public void testSampleServiceWithXmlResponse() throws IOException {
 
         HashMap<String, String> dynamicParameters = new HashMap<>();
@@ -331,12 +331,12 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         requestBuilderCustomizer.addHeaders(getHeadersToApply());
         ResultActions resultActions = performDefaultPost(CatalogServicesController.PATH_SERVICES
                 + CatalogServicesController.PATH_SERVICE_NAME, parameters, requestBuilderCustomizer,
-                                                         "there should not be any error", samplePlgConf.getId());
+                                                         "there should not be any error",
+                                                         samplePlgConf.getBusinessId());
         validateTestPluginResponse(resultActions, new File("src/test/resources/samplePluginResult.xml"));
     }
 
     @Test
-    @Ignore("Random success of test.")
     public void testSampleServiceWithImageResponse() throws IOException {
 
         HashMap<String, String> dynamicParameters = new HashMap<>();
@@ -350,12 +350,12 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         requestBuilderCustomizer.addHeaders(getHeadersToApply());
         ResultActions resultActions = performDefaultPost(CatalogServicesController.PATH_SERVICES
                 + CatalogServicesController.PATH_SERVICE_NAME, parameters, requestBuilderCustomizer,
-                                                         "there should not be any error", samplePlgConf.getId());
+                                                         "there should not be any error",
+                                                         samplePlgConf.getBusinessId());
         validateTestPluginResponse(resultActions, new File("src/test/resources/LogoCnes.png"));
     }
 
     @Test
-    @Ignore("Random success of test.")
     public void testSampleServiceWithUnkownResponse() throws IOException {
 
         HashMap<String, String> dynamicParameters = new HashMap<>();
@@ -369,7 +369,8 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         requestBuilderCustomizer.addHeaders(getHeadersToApply());
         ResultActions resultActions = performDefaultPost(CatalogServicesController.PATH_SERVICES
                 + CatalogServicesController.PATH_SERVICE_NAME, parameters, requestBuilderCustomizer,
-                                                         "there should not be any error", samplePlgConf.getId());
+                                                         "there should not be any error",
+                                                         samplePlgConf.getBusinessId());
         validateTestPluginResponse(resultActions, new File("src/test/resources/result.other"));
     }
 
@@ -377,7 +378,7 @@ public class CatalogServicesControllerIT extends AbstractRegardsTransactionalIT 
         Map<String, List<String>> headers = Maps.newHashMap();
         headers.put(HttpConstants.CONTENT_TYPE, Lists.newArrayList("application/json"));
         headers.put(HttpConstants.ACCEPT,
-                    Lists.newArrayList(MediaType.APPLICATION_JSON_UTF8_VALUE, MediaType.TEXT_PLAIN_VALUE));
+                    Lists.newArrayList(MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_PLAIN_VALUE));
 
         return headers;
     }

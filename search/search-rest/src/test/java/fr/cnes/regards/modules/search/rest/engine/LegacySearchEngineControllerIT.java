@@ -121,10 +121,26 @@ public class LegacySearchEngineControllerIT extends AbstractEngineIT {
     }
 
     @Test
+    public void searchDataset() {
+        RequestBuilderCustomizer customizer = customizer().expectStatusOk();
+        addCommontMatchers(customizer);
+        performDefaultGet(SearchEngineMappings.TYPE_MAPPING_FOR_LEGACY + "/datasets/"
+                + solarSystem.getIpId().toString(), customizer, "Search dataset error", ENGINE_TYPE);
+    }
+
+    @Test
     public void searchDataobjects() {
         RequestBuilderCustomizer customizer = customizer().expectStatusOk();
         addCommontMatchers(customizer);
         performDefaultGet(SearchEngineMappings.TYPE_MAPPING + SearchEngineMappings.SEARCH_DATAOBJECTS_MAPPING,
+                          customizer, "Search all error", ENGINE_TYPE);
+    }
+
+    @Test
+    public void searchDataobjectsAttributes() {
+        RequestBuilderCustomizer customizer = customizer().expectStatusOk();
+        customizer.expect(MockMvcResultMatchers.jsonPath("$", Matchers.hasSize(2)));
+        performDefaultGet(SearchEngineMappings.TYPE_MAPPING + SearchEngineMappings.SEARCH_DATAOBJECTS_ATTRIBUTES,
                           customizer, "Search all error", ENGINE_TYPE);
     }
 

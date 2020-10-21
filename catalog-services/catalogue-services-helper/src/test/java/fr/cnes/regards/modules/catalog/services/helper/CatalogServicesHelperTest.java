@@ -18,22 +18,31 @@
  */
 package fr.cnes.regards.modules.catalog.services.helper;
 
-import java.util.ArrayList;
-
+import org.junit.Assert;
 import org.junit.Test;
-import org.mockito.Mockito;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
-import fr.cnes.regards.framework.jpa.multitenant.transactional.MultitenantTransactional;
-import fr.cnes.regards.modules.opensearch.service.exception.OpenSearchParseException;
+import fr.cnes.regards.framework.module.rest.exception.ModuleException;
+import fr.cnes.regards.modules.search.domain.SearchRequest;
 
-@MultitenantTransactional
 public class CatalogServicesHelperTest {
 
     @Test
-    public void searchDataObjects() throws OpenSearchParseException {
-        ServiceHelper serviceHelper = Mockito.mock(ServiceHelper.class);
-        serviceHelper.getDataObjects(new ArrayList<>(), 0, 10);
-        serviceHelper.getDataObjects("ipId:test", 0, 10);
+    public void searchDataObjects() throws ModuleException {
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        params.add("q", "id:test");
+        params.add("facets", "[\"one\"]");
+        params.add("sort", "param,ASC");
+        SearchRequest request = new SearchRequest("legacy", null, params, null, null, null);
+        Assert.assertTrue(request.hasSearchParameters());
+
+        params.clear();
+        params.add("q", "");
+        params.add("facets", "[\"one\"]");
+        params.add("sort", "param,ASC");
+        request = new SearchRequest("legacy", null, params, null, null, null);
+        Assert.assertFalse(request.hasSearchParameters());
     }
 
 }

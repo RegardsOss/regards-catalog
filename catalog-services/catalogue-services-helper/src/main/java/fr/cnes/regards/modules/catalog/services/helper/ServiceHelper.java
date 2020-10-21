@@ -18,27 +18,27 @@
  */
 package fr.cnes.regards.modules.catalog.services.helper;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import fr.cnes.regards.framework.jpa.multitenant.transactional.MultitenantTransactional;
+import fr.cnes.regards.framework.module.rest.exception.ModuleException;
 import fr.cnes.regards.framework.multitenant.IRuntimeTenantResolver;
-import fr.cnes.regards.framework.oais.urn.EntityType;
+import fr.cnes.regards.framework.urn.EntityType;
 import fr.cnes.regards.modules.dam.domain.entities.DataObject;
 import fr.cnes.regards.modules.indexer.domain.SimpleSearchKey;
 import fr.cnes.regards.modules.indexer.domain.criterion.ICriterion;
 import fr.cnes.regards.modules.indexer.service.ISearchService;
 import fr.cnes.regards.modules.indexer.service.Searches;
-import fr.cnes.regards.modules.opensearch.service.IOpenSearchService;
-import fr.cnes.regards.modules.opensearch.service.exception.OpenSearchParseException;
+import fr.cnes.regards.modules.search.domain.SearchRequest;
+import fr.cnes.regards.modules.search.service.engine.SearchEngineDispatcher;
 
 /**
  * Helper to handle catalog entities searches for all Catalogue service plugins.
@@ -48,9 +48,6 @@ import fr.cnes.regards.modules.opensearch.service.exception.OpenSearchParseExcep
 @MultitenantTransactional
 public class ServiceHelper implements IServiceHelper {
 
-    /**
-     * Class logger
-     */
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceHelper.class);
 
     /**
@@ -58,10 +55,8 @@ public class ServiceHelper implements IServiceHelper {
      */
     private final ISearchService searchService;
 
-    /**
-     * Service to handle and parse open search queries.
-     */
-    private final IOpenSearchService openSearchService;
+    @Autowired
+    private SearchEngineDispatcher dispatcher;
 
     /**
      * Constructor
@@ -69,11 +64,9 @@ public class ServiceHelper implements IServiceHelper {
      * @param openSearchService
      * @param tenantResolver
      */
-    public ServiceHelper(ISearchService searchService, IOpenSearchService openSearchService,
-            IRuntimeTenantResolver tenantResolver) {
+    public ServiceHelper(ISearchService searchService, IRuntimeTenantResolver tenantResolver) {
         super();
         this.searchService = searchService;
-        this.openSearchService = openSearchService;
     }
 
     @Override
@@ -90,17 +83,17 @@ public class ServiceHelper implements IServiceHelper {
     }
 
     @Override
-    public Page<DataObject> getDataObjects(String openSearchQuery, int pageIndex, int nbEntitiesByPage)
-            throws OpenSearchParseException {
+    public Page<DataObject> getDataObjects(SearchRequest searchRequest, int pageIndex, int nbEntitiesByPage)
+            throws ModuleException {
         SimpleSearchKey<DataObject> searchKey = Searches.onSingleEntity(EntityType.DATA);
-        String queryParameters = openSearchQuery;
-        try {
-            queryParameters = URLEncoder.encode(URLDecoder.decode(queryParameters, "UTF-8"), "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            LOGGER.error(e.getMessage(), e);
+        ICriterion crit = dispatcher.computeComplexCriterion(searchRequest);
+        // Check criterion properly translated
+        if (searchRequest.hasSearchParameters() && crit.isEmpty()) {
+            String errorMessage = String.format("Unexpected search parameters %s", searchRequest.getSearchParameters());
+            LOGGER.error(errorMessage);
+            throw new ModuleException(errorMessage);
         }
-        ICriterion crit = openSearchService.parse(String.format("q=%s", queryParameters));
-        PageRequest pageReq = PageRequest.of(pageIndex, nbEntitiesByPage);
+        PageRequest pageReq = PageRequest.of(pageIndex, nbEntitiesByPage, Sort.by("ipId"));
         return searchService.search(searchKey, pageReq, crit);
     }
 

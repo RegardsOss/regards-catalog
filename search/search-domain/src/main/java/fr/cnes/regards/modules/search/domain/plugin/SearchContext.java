@@ -34,8 +34,8 @@ import org.springframework.util.MultiValueMap;
 
 import com.google.common.collect.Sets;
 
-import fr.cnes.regards.framework.oais.urn.DataType;
-import fr.cnes.regards.framework.oais.urn.UniformResourceName;
+import fr.cnes.regards.framework.urn.DataType;
+import fr.cnes.regards.framework.urn.UniformResourceName;
 
 /**
  * Search context for search engine.<br/>
@@ -231,7 +231,7 @@ public class SearchContext {
         context.setHeaders(headers);
         if (queryParams != null) {
             List<String> parser = queryParams.get(SearchEngineMappings.SEARCH_REQUEST_PARSER);
-            if (parser != null && !parser.isEmpty()) {
+            if ((parser != null) && !parser.isEmpty()) {
                 context.setEngineRequestParserType(parser.get(0));
             }
             // Filter spring pagination parameters if any
@@ -280,7 +280,7 @@ public class SearchContext {
     }
 
     public SearchContext withPropertyNames(Collection<String> propertyNames) {
-        if (propertyNames != null && !propertyNames.isEmpty()) {
+        if ((propertyNames != null) && !propertyNames.isEmpty()) {
             this.propertyNames.addAll(propertyNames);
         }
         return this;

@@ -25,7 +25,8 @@ import javax.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import fr.cnes.regards.framework.oais.urn.EntityType;
+import fr.cnes.regards.framework.urn.EntityType;
+import fr.cnes.regards.modules.search.domain.SearchRequest;
 
 /**
  * Interface to define a Catalog service plugin. This plugins applies on multiple entities.
@@ -49,7 +50,7 @@ public interface IEntitiesServicePlugin extends IService {
      * @param pOpenSearchQuery OpenSearch query
      * @param pEntityType Entity type
      */
-    ResponseEntity<StreamingResponseBody> applyOnQuery(String pOpenSearchQuery, EntityType pEntityType,
+    ResponseEntity<StreamingResponseBody> applyOnQuery(SearchRequest searchRequest, EntityType pEntityType,
             HttpServletResponse response);
 
 }

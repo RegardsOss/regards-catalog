@@ -28,8 +28,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedResourcesAssembler;
-import org.springframework.hateoas.PagedResources;
-import org.springframework.hateoas.Resource;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.LinkRelation;
+import org.springframework.hateoas.PagedModel;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -50,8 +51,9 @@ import fr.cnes.regards.framework.module.rest.exception.ModuleException;
 import fr.cnes.regards.framework.security.annotation.ResourceAccess;
 import fr.cnes.regards.framework.security.role.DefaultRole;
 import fr.cnes.regards.modules.search.domain.plugin.SearchEngineConfiguration;
-import fr.cnes.regards.modules.search.rest.engine.plugin.legacy.LegacySearchEngine;
+import fr.cnes.regards.modules.search.domain.plugin.SearchEngineMappings;
 import fr.cnes.regards.modules.search.service.ISearchEngineConfigurationService;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.OpenSearchEngine;
 
 /**
  * Controller for {@link SearchEngineConfiguration}s CRUD
@@ -80,18 +82,18 @@ public class SearchEngineConfigurationController implements IResourceController<
 
     @RequestMapping(method = RequestMethod.GET)
     @ResourceAccess(description = "Retrieve all search engine confiurations", role = DefaultRole.PROJECT_ADMIN)
-    public ResponseEntity<PagedResources<Resource<SearchEngineConfiguration>>> retrieveConfs(
+    public ResponseEntity<PagedModel<EntityModel<SearchEngineConfiguration>>> retrieveConfs(
             @RequestParam(value = ENGINE_TYPE, required = false) final String engineType,
             @PageableDefault(sort = "id", direction = Sort.Direction.ASC) Pageable pageable,
             final PagedResourcesAssembler<SearchEngineConfiguration> assembler) throws ModuleException {
         final Page<SearchEngineConfiguration> confs = service.retrieveConfs(Optional.ofNullable(engineType), pageable);
-        final PagedResources<Resource<SearchEngineConfiguration>> resources = toPagedResources(confs, assembler);
+        final PagedModel<EntityModel<SearchEngineConfiguration>> resources = toPagedResources(confs, assembler);
         return new ResponseEntity<>(resources, HttpStatus.OK);
     }
 
     @RequestMapping(method = RequestMethod.GET, value = CONF_ID_PATH)
     @ResourceAccess(description = "Retrieve a search engine configuration", role = DefaultRole.PROJECT_ADMIN)
-    public ResponseEntity<Resource<SearchEngineConfiguration>> retrieveConf(
+    public ResponseEntity<EntityModel<SearchEngineConfiguration>> retrieveConf(
             @PathVariable(CONF_ID_PARAMETER_NAME) Long confId) throws ModuleException {
         final SearchEngineConfiguration conf = service.retrieveConf(confId);
         return new ResponseEntity<>(toResource(conf), HttpStatus.OK);
@@ -99,7 +101,7 @@ public class SearchEngineConfigurationController implements IResourceController<
 
     @RequestMapping(method = RequestMethod.DELETE, value = CONF_ID_PATH)
     @ResourceAccess(description = "Delete a search engine configuration", role = DefaultRole.PROJECT_ADMIN)
-    public ResponseEntity<Resource<SearchEngineConfiguration>> deleteConf(
+    public ResponseEntity<EntityModel<SearchEngineConfiguration>> deleteConf(
             @PathVariable(CONF_ID_PARAMETER_NAME) final Long confId) throws ModuleException {
         service.deleteConf(confId);
         return new ResponseEntity<>(HttpStatus.OK);
@@ -107,7 +109,7 @@ public class SearchEngineConfigurationController implements IResourceController<
 
     @RequestMapping(method = RequestMethod.POST)
     @ResourceAccess(description = "Create a new search engine configuration", role = DefaultRole.PROJECT_ADMIN)
-    public ResponseEntity<Resource<SearchEngineConfiguration>> createConf(
+    public ResponseEntity<EntityModel<SearchEngineConfiguration>> createConf(
             @Valid @RequestBody SearchEngineConfiguration conf) throws ModuleException {
         final SearchEngineConfiguration newConf = service.createConf(conf);
         return new ResponseEntity<>(toResource(newConf), HttpStatus.CREATED);
@@ -115,7 +117,7 @@ public class SearchEngineConfigurationController implements IResourceController<
 
     @RequestMapping(method = RequestMethod.PUT, value = CONF_ID_PATH)
     @ResourceAccess(description = "Update a search engine configuration", role = DefaultRole.PROJECT_ADMIN)
-    public ResponseEntity<Resource<SearchEngineConfiguration>> updateConf(
+    public ResponseEntity<EntityModel<SearchEngineConfiguration>> updateConf(
             @PathVariable(CONF_ID_PARAMETER_NAME) final Long confId, @Valid @RequestBody SearchEngineConfiguration conf)
             throws ModuleException {
         if (!confId.equals(conf.getId())) {
@@ -126,12 +128,12 @@ public class SearchEngineConfigurationController implements IResourceController<
     }
 
     @Override
-    public Resource<SearchEngineConfiguration> toResource(SearchEngineConfiguration element, Object... extras) {
-        final Resource<SearchEngineConfiguration> resource = resourceService.toResource(element);
+    public EntityModel<SearchEngineConfiguration> toResource(SearchEngineConfiguration element, Object... extras) {
+        final EntityModel<SearchEngineConfiguration> resource = resourceService.toResource(element);
         resourceService.addLink(resource, this.getClass(), "retrieveConf", LinkRels.SELF,
                                 MethodParamFactory.build(Long.class, element.getId()));
         if ((element.getDatasetUrn() != null)
-                || !element.getConfiguration().getPluginId().equals(LegacySearchEngine.PLUGIN_ID)) {
+                || !element.getConfiguration().getPluginId().equals(SearchEngineMappings.LEGACY_PLUGIN_ID)) {
             resourceService.addLink(resource, this.getClass(), "deleteConf", LinkRels.DELETE,
                                     MethodParamFactory.build(Long.class, element.getId()));
         }
@@ -139,19 +141,61 @@ public class SearchEngineConfigurationController implements IResourceController<
                                 MethodParamFactory.build(Long.class, element.getId()),
                                 MethodParamFactory.build(SearchEngineConfiguration.class));
         if (element.getDatasetUrn() == null) {
-            resourceService.addLink(resource, SearchEngineController.class, "searchAll", "search",
+            resourceService.addLink(resource, SearchEngineController.class, "searchAll", LinkRelation.of("search"),
                                     MethodParamFactory.build(String.class, element.getConfiguration().getPluginId()),
                                     MethodParamFactory.build(HttpHeaders.class),
                                     MethodParamFactory.build(MultiValueMap.class),
                                     MethodParamFactory.build(Pageable.class));
+            resourceService.addLink(resource, SearchEngineController.class, "searchAllDataobjects",
+                                    LinkRelation.of("search-objects"),
+                                    MethodParamFactory.build(String.class, element.getConfiguration().getPluginId()),
+                                    MethodParamFactory.build(HttpHeaders.class),
+                                    MethodParamFactory.build(MultiValueMap.class),
+                                    MethodParamFactory.build(Pageable.class));
+            resourceService.addLink(resource, SearchEngineController.class, "searchAllDatasets",
+                                    LinkRelation.of("search-datasets"),
+                                    MethodParamFactory.build(String.class, element.getConfiguration().getPluginId()),
+                                    MethodParamFactory.build(HttpHeaders.class),
+                                    MethodParamFactory.build(MultiValueMap.class),
+                                    MethodParamFactory.build(Pageable.class));
+            resourceService.addLink(resource, SearchEngineController.class, "searchAllCollections",
+                                    LinkRelation.of("search-collections"),
+                                    MethodParamFactory.build(String.class, element.getConfiguration().getPluginId()),
+                                    MethodParamFactory.build(HttpHeaders.class),
+                                    MethodParamFactory.build(MultiValueMap.class),
+                                    MethodParamFactory.build(Pageable.class));
+            if (element.getConfiguration().getPluginId().equals(OpenSearchEngine.ENGINE_ID)) {
+                // Add description link
+                resourceService.addLink(resource, SearchEngineController.class, "searchAllDataobjectsExtra",
+                                        LinkRelation.of(OpenSearchEngine.EXTRA_DESCRIPTION),
+                                        MethodParamFactory.build(String.class,
+                                                                 element.getConfiguration().getPluginId()),
+                                        MethodParamFactory.build(String.class, OpenSearchEngine.EXTRA_DESCRIPTION),
+                                        MethodParamFactory.build(HttpHeaders.class),
+                                        MethodParamFactory.build(MultiValueMap.class),
+                                        MethodParamFactory.build(Pageable.class));
+            }
         } else {
-            resourceService.addLink(resource, SearchEngineController.class, "searchSingleDataset", "search",
-                                    MethodParamFactory.build(String.class, element.getConfiguration().getPluginId()),
-                                    MethodParamFactory.build(String.class, element.getDatasetUrn()),
-                                    MethodParamFactory.build(HttpHeaders.class),
-                                    MethodParamFactory.build(MultiValueMap.class),
-                                    MethodParamFactory.build(Pageable.class));
+            resourceService
+                    .addLink(resource, SearchEngineController.class, "searchSingleDataset", LinkRelation.of("search"),
+                             MethodParamFactory.build(String.class, element.getConfiguration().getPluginId()),
+                             MethodParamFactory.build(String.class, element.getDatasetUrn()),
+                             MethodParamFactory.build(HttpHeaders.class), MethodParamFactory.build(MultiValueMap.class),
+                             MethodParamFactory.build(Pageable.class));
+            if (element.getConfiguration().getPluginId().equals(OpenSearchEngine.ENGINE_ID)) {
+                // Add description link
+                resourceService.addLink(resource, SearchEngineController.class, "searchSingleDatasetExtra",
+                                        LinkRelation.of(OpenSearchEngine.EXTRA_DESCRIPTION),
+                                        MethodParamFactory.build(String.class,
+                                                                 element.getConfiguration().getPluginId()),
+                                        MethodParamFactory.build(String.class, element.getDatasetUrn()),
+                                        MethodParamFactory.build(String.class, OpenSearchEngine.EXTRA_DESCRIPTION),
+                                        MethodParamFactory.build(HttpHeaders.class),
+                                        MethodParamFactory.build(MultiValueMap.class),
+                                        MethodParamFactory.build(Pageable.class));
+            }
         }
+
         return resource;
     }
 

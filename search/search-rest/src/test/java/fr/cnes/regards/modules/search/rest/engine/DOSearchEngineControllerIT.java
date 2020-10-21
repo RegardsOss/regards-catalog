@@ -31,8 +31,8 @@ import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.hateoas.PagedResources;
-import org.springframework.hateoas.Resource;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.ResultActions;
@@ -76,11 +76,11 @@ public class DOSearchEngineControllerIT extends AbstractEngineIT {
 
         // Mock user groups
         AccessGroup ag = new AccessGroup(ACCESS_GROUP);
-        Collection<Resource<AccessGroup>> ags = new ArrayList<>();
-        ags.add(new Resource<AccessGroup>(ag));
+        Collection<EntityModel<AccessGroup>> ags = new ArrayList<>();
+        ags.add(new EntityModel<AccessGroup>(ag));
 
-        PagedResources.PageMetadata md = new PagedResources.PageMetadata(0, 0, 0);
-        PagedResources<Resource<AccessGroup>> pagedResources = new PagedResources<>(ags, md, new ArrayList<>());
+        PagedModel.PageMetadata md = new PagedModel.PageMetadata(0, 0, 0);
+        PagedModel<EntityModel<AccessGroup>> pagedResources = new PagedModel<>(ags, md, new ArrayList<>());
         Mockito.when(userClient.retrieveAccessGroupsOfUser(Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt()))
                 .thenReturn(ResponseEntity.ok(pagedResources));
     }
@@ -94,7 +94,8 @@ public class DOSearchEngineControllerIT extends AbstractEngineIT {
 
     private ResultActions searchDataobjects() {
         RequestBuilderCustomizer customizer = customizer().expectStatusOk();
-        customizer.expect(MockMvcResultMatchers.jsonPath("$.content.length()", Matchers.equalTo(9)));
+        // 9 data from planets & 2 datas from test datas
+        customizer.expect(MockMvcResultMatchers.jsonPath("$.content.length()", Matchers.equalTo(11)));
         return performDefaultGet(SearchEngineMappings.TYPE_MAPPING + SearchEngineMappings.SEARCH_DATAOBJECTS_MAPPING,
                                  customizer, "Search all error", ENGINE_TYPE);
     }

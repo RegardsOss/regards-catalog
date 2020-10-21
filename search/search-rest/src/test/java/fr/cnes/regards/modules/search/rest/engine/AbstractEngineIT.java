@@ -28,13 +28,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.apache.commons.collections4.map.HashedMap;
 import org.assertj.core.util.Lists;
 import org.junit.Before;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.hateoas.Resource;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
@@ -49,40 +50,40 @@ import fr.cnes.regards.framework.module.rest.exception.ModuleException;
 import fr.cnes.regards.framework.modules.plugins.domain.PluginConfiguration;
 import fr.cnes.regards.framework.modules.plugins.domain.parameter.IPluginParam;
 import fr.cnes.regards.framework.modules.plugins.service.IPluginService;
-import fr.cnes.regards.framework.oais.urn.DataType;
-import fr.cnes.regards.framework.oais.urn.EntityType;
-import fr.cnes.regards.framework.oais.urn.UniformResourceName;
 import fr.cnes.regards.framework.test.integration.AbstractRegardsTransactionalIT;
+import fr.cnes.regards.framework.urn.DataType;
+import fr.cnes.regards.framework.urn.EntityType;
+import fr.cnes.regards.framework.urn.UniformResourceName;
 import fr.cnes.regards.framework.utils.plugins.PluginParameterTransformer;
-import fr.cnes.regards.framework.utils.plugins.PluginUtils;
 import fr.cnes.regards.modules.accessrights.client.IProjectUsersClient;
-import fr.cnes.regards.modules.dam.client.models.IAttributeModelClient;
-import fr.cnes.regards.modules.dam.client.models.IModelAttrAssocClient;
 import fr.cnes.regards.modules.dam.domain.entities.AbstractEntity;
 import fr.cnes.regards.modules.dam.domain.entities.Collection;
 import fr.cnes.regards.modules.dam.domain.entities.DataObject;
 import fr.cnes.regards.modules.dam.domain.entities.Dataset;
-import fr.cnes.regards.modules.dam.domain.entities.attribute.builder.AttributeBuilder;
-import fr.cnes.regards.modules.dam.domain.models.Model;
-import fr.cnes.regards.modules.dam.domain.models.attributes.AttributeModel;
-import fr.cnes.regards.modules.dam.gson.entities.MultitenantFlattenedAttributeAdapterFactory;
-import fr.cnes.regards.modules.dam.service.models.IAttributeModelService;
-import fr.cnes.regards.modules.dam.service.models.ModelService;
 import fr.cnes.regards.modules.indexer.dao.IEsRepository;
 import fr.cnes.regards.modules.indexer.domain.DataFile;
 import fr.cnes.regards.modules.indexer.service.IIndexerService;
+import fr.cnes.regards.modules.model.client.IAttributeModelClient;
+import fr.cnes.regards.modules.model.client.IModelAttrAssocClient;
+import fr.cnes.regards.modules.model.domain.Model;
+import fr.cnes.regards.modules.model.domain.ModelAttrAssoc;
+import fr.cnes.regards.modules.model.domain.attributes.AttributeModel;
+import fr.cnes.regards.modules.model.dto.properties.IProperty;
+import fr.cnes.regards.modules.model.gson.MultitenantFlattenedAttributeAdapterFactory;
+import fr.cnes.regards.modules.model.service.IAttributeModelService;
+import fr.cnes.regards.modules.model.service.ModelService;
 import fr.cnes.regards.modules.opensearch.service.cache.attributemodel.IAttributeFinder;
 import fr.cnes.regards.modules.project.client.rest.IProjectsClient;
 import fr.cnes.regards.modules.project.domain.Project;
 import fr.cnes.regards.modules.search.domain.plugin.SearchEngineConfiguration;
 import fr.cnes.regards.modules.search.domain.plugin.SearchEngineMappings;
-import fr.cnes.regards.modules.search.rest.engine.plugin.opensearch.EngineConfiguration;
-import fr.cnes.regards.modules.search.rest.engine.plugin.opensearch.OpenSearchEngine;
-import fr.cnes.regards.modules.search.rest.engine.plugin.opensearch.ParameterConfiguration;
-import fr.cnes.regards.modules.search.rest.engine.plugin.opensearch.extension.geo.GeoTimeExtension;
-import fr.cnes.regards.modules.search.rest.engine.plugin.opensearch.extension.media.MediaExtension;
-import fr.cnes.regards.modules.search.rest.engine.plugin.opensearch.extension.regards.RegardsExtension;
 import fr.cnes.regards.modules.search.service.ISearchEngineConfigurationService;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.EngineConfiguration;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.OpenSearchEngine;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.ParameterConfiguration;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.extension.geo.GeoTimeExtension;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.extension.media.MediaExtension;
+import fr.cnes.regards.modules.search.service.engine.plugin.opensearch.extension.regards.RegardsExtension;
 
 /**
  * Engine common methods
@@ -190,6 +191,8 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
 
     protected PluginConfiguration openSearchPluginConf;
 
+    protected Dataset solarSystem;
+
     protected void initIndex(String index) {
         if (esRepository.indexExists(index)) {
             esRepository.deleteIndex(index);
@@ -207,7 +210,7 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         // Manage project
         Project project = new Project(1L, "Solar system project", "http://plop/icon.png", true, "SolarSystem");
         project.setHost("http://regards/solarsystem");
-        ResponseEntity<Resource<Project>> response = ResponseEntity.ok(new Resource<>(project));
+        ResponseEntity<EntityModel<Project>> response = ResponseEntity.ok(new EntityModel<>(project));
         Mockito.when(projectsClientMock.retrieveProject(Mockito.anyString())).thenReturn(response);
 
         // Bypass method access rights
@@ -262,6 +265,8 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         // DATA : Planet
         Model planetModel = modelService.importModel(this.getClass().getResourceAsStream("data_planet.xml"));
 
+        Model testModel = modelService.importModel(this.getClass().getResourceAsStream("data_model_test.xml"));
+
         // - Manage attribute model retrieval
         Mockito.when(modelAttrAssocClientMock.getModelAttrAssocsFor(Mockito.any())).thenAnswer(invocation -> {
             EntityType type = invocation.getArgument(0);
@@ -272,14 +277,19 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
                     // UniformResourceName datasetUrn = invocation.getArgumentAt(0, UniformResourceName.class);
                     return ResponseEntity.ok(modelService.getModelAttrAssocsFor(EntityType.DATA));
                 });
+        Mockito.when(modelAttrAssocClientMock.getModelAttrAssocs(Mockito.any())).thenAnswer(invocation -> {
+            String modelName = invocation.getArgument(0);
+            return ResponseEntity.ok(modelService.getModelAttrAssocs(modelName).stream()
+                    .map(a -> new EntityModel<ModelAttrAssoc>(a)).collect(Collectors.toList()));
+        });
 
         // - Refresh attribute factory
         List<AttributeModel> atts = attributeModelService.getAttributes(null, null, null);
         gsonAttributeFactory.refresh(getDefaultTenant(), atts);
 
         // - Manage attribute cache
-        List<Resource<AttributeModel>> resAtts = new ArrayList<>();
-        atts.forEach(att -> resAtts.add(new Resource<AttributeModel>(att)));
+        List<EntityModel<AttributeModel>> resAtts = new ArrayList<>();
+        atts.forEach(att -> resAtts.add(new EntityModel<AttributeModel>(att)));
         Mockito.when(attributeModelClientMock.getAttributes(null, null)).thenReturn(ResponseEntity.ok(resAtts));
         finder.refresh(getDefaultTenant());
 
@@ -287,7 +297,7 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         indexerService.saveBulkEntities(getDefaultTenant(), createGalaxies(galaxyModel));
         indexerService.saveBulkEntities(getDefaultTenant(), createStars(starModel));
 
-        Dataset solarSystem = createStelarSystem(starSystemModel, SOLAR_SYSTEM);
+        solarSystem = createStelarSystem(starSystemModel, SOLAR_SYSTEM);
         indexerService.saveEntity(getDefaultTenant(), solarSystem);
         indexerService.saveBulkEntities(getDefaultTenant(), createPlanets(planetModel, solarSystem.getIpId()));
 
@@ -295,6 +305,9 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         indexerService.saveEntity(getDefaultTenant(), kepler90System);
         DataObject kepler90b = createPlanet(planetModel, "Kepler 90b", PLANET_TYPE_TELLURIC, 1000, 50_000_000L);
         indexerService.saveEntity(getDefaultTenant(), kepler90b);
+
+        // Add test datas
+        indexerService.saveBulkEntities(getDefaultTenant(), createTestData(testModel));
 
         // Refresh index to be sure data is available for requesting
         indexerService.refresh(getDefaultTenant());
@@ -321,7 +334,7 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
 
         ParameterConfiguration startTimeParameter = new ParameterConfiguration();
         startTimeParameter.setAttributeModelJsonPath("properties.TimePeriod.startDate");
-        startTimeParameter.setAllias("début");
+        startTimeParameter.setAllias("debut");
         startTimeParameter.setName("start");
         startTimeParameter.setNamespace("time");
         paramConfigurations.add(startTimeParameter);
@@ -352,7 +365,7 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
                      IPluginParam.build(OpenSearchEngine.ENGINE_PARAMETERS,
                                         PluginParameterTransformer.toJson(engineConfiguration)));
 
-        PluginConfiguration opensearchConf = PluginUtils.getPluginConfiguration(parameters, OpenSearchEngine.class);
+        PluginConfiguration opensearchConf = PluginConfiguration.build(OpenSearchEngine.class, null, parameters);
         openSearchPluginConf = pluginService.savePluginConfiguration(opensearchConf);
         SearchEngineConfiguration seConfOS = new SearchEngineConfiguration();
         seConfOS.setConfiguration(openSearchPluginConf);
@@ -377,23 +390,22 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
 
     protected List<Collection> createGalaxies(Model galaxyModel) {
         Collection milkyWay = createEntity(galaxyModel, MILKY_WAY);
-        milkyWay.addProperty(AttributeBuilder.buildString(GALAXY, MILKY_WAY));
-        milkyWay.addProperty(AttributeBuilder
-                .buildString(ABSTRACT, "The Milky Way is the galaxy that contains our Solar System."));
+        milkyWay.addProperty(IProperty.buildString(GALAXY, MILKY_WAY));
+        milkyWay.addProperty(IProperty.buildString(ABSTRACT,
+                                                   "The Milky Way is the galaxy that contains our Solar System."));
         return Arrays.asList(milkyWay);
     }
 
     protected List<Collection> createStars(Model starModel) {
         Collection sun = createEntity(starModel, SUN);
-        sun.addProperty(AttributeBuilder.buildString(STAR, SUN));
-        sun.addProperty(AttributeBuilder.buildString(ABSTRACT,
-                                                     "The Sun is the star at the center of the Solar System."));
+        sun.addProperty(IProperty.buildString(STAR, SUN));
+        sun.addProperty(IProperty.buildString(ABSTRACT, "The Sun is the star at the center of the Solar System."));
         return Arrays.asList(sun);
     }
 
     protected Dataset createStelarSystem(Model starSystemModel, String label) {
         Dataset solarSystem = createEntity(starSystemModel, label);
-        solarSystem.addProperty(AttributeBuilder.buildString(STAR_SYSTEM, label));
+        solarSystem.addProperty(IProperty.buildString(STAR_SYSTEM, label));
         solarSystem.addTags("REGARDS");
         solarSystem.addTags("CNES");
         solarSystem.addTags("CS-SI");
@@ -416,6 +428,24 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         // Attach planets to dataset
         planets.forEach(planet -> planet.addTags(dataset.toString()));
         return planets;
+    }
+
+    protected List<DataObject> createTestData(Model model) {
+        List<DataObject> datas = new ArrayList<>();
+
+        DataObject data = createEntity(model, "data_one");
+        data.addProperty(IProperty.buildString("name_test", "data_one_test"));
+        data.setGroups(getAccessGroups());
+        data.setCreationDate(OffsetDateTime.now());
+        datas.add(data);
+
+        data = createEntity(model, "data_two");
+        data.addProperty(IProperty.buildString("name_test", "data_two_test"));
+        data.setGroups(getAccessGroups());
+        data.setCreationDate(OffsetDateTime.now());
+        datas.add(data);
+
+        return datas;
     }
 
     protected DataObject createMercury(Model planetModel) {
@@ -464,9 +494,8 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
                                          IGeometry.position(10.0, 10.0))));
         planet.setGeometry(geo);
         planet.setWgs84(geo);
-        planet.addProperty(AttributeBuilder.buildObject("TimePeriod",
-                                                        AttributeBuilder.buildDate(START_DATE, startDateValue),
-                                                        AttributeBuilder.buildDate(STOP_DATE, stopDateValue)));
+        planet.addProperty(IProperty.buildObject("TimePeriod", IProperty.buildDate(START_DATE, startDateValue),
+                                                 IProperty.buildDate(STOP_DATE, stopDateValue)));
 
         return planet;
     }
@@ -483,14 +512,15 @@ public abstract class AbstractEngineIT extends AbstractRegardsTransactionalIT {
         DataObject planet = createEntity(planetModel, name);
         planet.setGroups(getAccessGroups());
         planet.setCreationDate(OffsetDateTime.now());
-        planet.addProperty(AttributeBuilder.buildString(PLANET, name));
-        planet.addProperty(AttributeBuilder.buildString(PLANET_TYPE, type));
-        planet.addProperty(AttributeBuilder.buildInteger(PLANET_DIAMETER, diameter));
-        planet.addProperty(AttributeBuilder.buildLong(PLANET_SUN_DISTANCE, sunDistance));
+        planet.addProperty(IProperty.buildString(PLANET, name));
+        planet.addProperty(IProperty.buildString(PLANET_TYPE, type));
+        planet.addProperty(IProperty.buildInteger(PLANET_DIAMETER, diameter));
+        planet.addProperty(IProperty.buildLong(PLANET_SUN_DISTANCE, sunDistance));
         if ((params != null) && !params.isEmpty()) {
-            planet.addProperty(AttributeBuilder.buildStringArray(PLANET_PARAMS,
-                                                                 params.toArray(new String[params.size()])));
+            planet.addProperty(IProperty.buildStringArray(PLANET_PARAMS, params.toArray(new String[params.size()])));
         }
+        planet.addProperty(IProperty.buildObject("TimePeriod", IProperty.buildDate(START_DATE, startDateValue),
+                                                 IProperty.buildDate(STOP_DATE, stopDateValue)));
         return planet;
     }
 

@@ -19,17 +19,19 @@
 package fr.cnes.regards.modules.search.rest;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 
 import org.apache.commons.compress.utils.Lists;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.web.PagedResourcesAssembler;
-import org.springframework.hateoas.PagedResources;
-import org.springframework.hateoas.Resource;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.PagedModel;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,23 +39,22 @@ import org.springframework.web.bind.annotation.RestController;
 import fr.cnes.regards.framework.hateoas.IResourceController;
 import fr.cnes.regards.framework.hateoas.IResourceService;
 import fr.cnes.regards.framework.module.rest.exception.ModuleException;
-import fr.cnes.regards.framework.oais.urn.DataType;
-import fr.cnes.regards.framework.oais.urn.UniformResourceName;
 import fr.cnes.regards.framework.security.annotation.ResourceAccess;
 import fr.cnes.regards.framework.security.role.DefaultRole;
-import fr.cnes.regards.modules.dam.domain.entities.StaticProperties;
+import fr.cnes.regards.framework.urn.DataType;
 import fr.cnes.regards.modules.dam.domain.entities.feature.EntityFeature;
 import fr.cnes.regards.modules.indexer.dao.FacetPage;
 import fr.cnes.regards.modules.indexer.domain.criterion.ICriterion;
 import fr.cnes.regards.modules.indexer.domain.summary.DocFilesSummary;
+import fr.cnes.regards.modules.model.domain.attributes.AttributeModel;
+import fr.cnes.regards.modules.model.gson.IAttributeHelper;
+import fr.cnes.regards.modules.model.gson.helper.AttributeHelper;
 import fr.cnes.regards.modules.search.domain.ComplexSearchRequest;
 import fr.cnes.regards.modules.search.domain.SearchRequest;
-import fr.cnes.regards.modules.search.domain.plugin.ISearchEngine;
-import fr.cnes.regards.modules.search.domain.plugin.SearchContext;
-import fr.cnes.regards.modules.search.domain.plugin.SearchEngineMappings;
 import fr.cnes.regards.modules.search.domain.plugin.SearchType;
-import fr.cnes.regards.modules.search.rest.engine.ISearchEngineDispatcher;
 import fr.cnes.regards.modules.search.service.IBusinessSearchService;
+import fr.cnes.regards.modules.search.service.SearchException;
+import fr.cnes.regards.modules.search.service.engine.ISearchEngineDispatcher;
 
 /**
  * Complex search controller. Handle complex searches on catalog with multiple search requests. Each request handles :
@@ -71,6 +72,8 @@ public class ComplexSearchController implements IResourceController<EntityFeatur
     public static final String TYPE_MAPPING = "/complex/search";
 
     public static final String SUMMARY_MAPPING = "/summary";
+
+    public static final String SEARCH_DATAOBJECTS_ATTRIBUTES = "/dataobjects/attributes";
 
     /**
      * To build resource links
@@ -90,6 +93,9 @@ public class ComplexSearchController implements IResourceController<EntityFeatur
     @Autowired
     protected IBusinessSearchService searchService;
 
+    @Autowired
+    private IAttributeHelper attributeHelper;
+
     /**
      * Compute a DocFileSummary for current user, for specified request context, for asked file types (see
      * {@link DataType})
@@ -102,11 +108,11 @@ public class ComplexSearchController implements IResourceController<EntityFeatur
             @RequestBody ComplexSearchRequest complexSearchRequest) throws ModuleException {
         List<ICriterion> searchCriterions = Lists.newArrayList();
         for (SearchRequest request : complexSearchRequest.getRequests()) {
-            searchCriterions.add(computeComplexCriterion(request));
+            searchCriterions.add(dispatcher.computeComplexCriterion(request));
         }
 
         List<DataType> dataTypes = complexSearchRequest.getDataTypes();
-        if (dataTypes == null || dataTypes.isEmpty()) {
+        if ((dataTypes == null) || dataTypes.isEmpty()) {
             dataTypes = Lists.newArrayList();
             for (DataType type : DataType.values()) {
                 dataTypes.add(type);
@@ -125,12 +131,12 @@ public class ComplexSearchController implements IResourceController<EntityFeatur
      */
     @RequestMapping(method = RequestMethod.POST)
     @ResourceAccess(description = "Get features from a complex search", role = DefaultRole.PUBLIC)
-    public ResponseEntity<PagedResources<Resource<EntityFeature>>> searchDataObjects(
+    public ResponseEntity<PagedModel<EntityModel<EntityFeature>>> searchDataObjects(
             @RequestBody ComplexSearchRequest complexSearchRequest, PagedResourcesAssembler<EntityFeature> assembler)
             throws ModuleException {
         List<ICriterion> searchCriterions = Lists.newArrayList();
         for (SearchRequest request : complexSearchRequest.getRequests()) {
-            searchCriterions.add(computeComplexCriterion(request));
+            searchCriterions.add(dispatcher.computeComplexCriterion(request));
         }
         FacetPage<EntityFeature> facetPage = searchService
                 .search(ICriterion.or(searchCriterions), SearchType.DATAOBJECTS, null,
@@ -138,60 +144,19 @@ public class ComplexSearchController implements IResourceController<EntityFeatur
         return new ResponseEntity<>(toPagedResources(facetPage, assembler), HttpStatus.OK);
     }
 
-    /**
-     * Compute a {@link SearchRequest} to a {@link ICriterion}
-     * @throws ModuleException
-     */
-    private ICriterion computeComplexCriterion(SearchRequest searchRequest) throws ModuleException {
-        UniformResourceName datasetUrn = null;
-        if (searchRequest.getDatasetUrn() != null) {
-            datasetUrn = UniformResourceName.fromString(searchRequest.getDatasetUrn());
-        }
-        ISearchEngine<?, ?, ?, ?> searchEngine = dispatcher.getSearchEngine(Optional.ofNullable(datasetUrn),
-                                                                            searchRequest.getEngineType());
-
-        // Open search request
-        SearchContext context = SearchContext.build(SearchType.DATAOBJECTS, searchRequest.getEngineType(),
-                                                    SearchEngineMappings.getJsonHeaders(),
-                                                    searchRequest.getSearchParameters(), PageRequest.of(0, 1));
-        if (searchRequest.getDatasetUrn() != null) {
-            context = context.withDatasetUrn(UniformResourceName.fromString(searchRequest.getDatasetUrn()));
-        }
-        ICriterion reqCrit = searchEngine.parse(context);
-
-        // Date criterion
-        if (searchRequest.getSearchDateLimit() != null) {
-            reqCrit = ICriterion.and(reqCrit,
-                                     ICriterion.lt(StaticProperties.CREATION_DATE, searchRequest.getSearchDateLimit()));
-        }
-
-        // Include ids criterion
-        if (searchRequest.getEntityIdsToInclude() != null && !searchRequest.getEntityIdsToInclude().isEmpty()) {
-            ICriterion idsCrit = null;
-            for (String ipId : searchRequest.getEntityIdsToInclude()) {
-                if (idsCrit == null) {
-                    idsCrit = ICriterion.eq(StaticProperties.IP_ID, ipId);
-                } else {
-                    idsCrit = ICriterion.or(idsCrit, ICriterion.eq(StaticProperties.IP_ID, ipId));
-                }
-            }
-            if (idsCrit != null) {
-                reqCrit = ICriterion.and(reqCrit, idsCrit);
-            }
-        }
-
-        // Exclude ids criterion
-        if (searchRequest.getEntityIdsToExclude() != null && !searchRequest.getEntityIdsToExclude().isEmpty()) {
-            for (String ipId : searchRequest.getEntityIdsToExclude()) {
-                reqCrit = ICriterion.and(reqCrit, ICriterion.not(ICriterion.eq(StaticProperties.IP_ID, ipId)));
-            }
-        }
-
-        return reqCrit;
+    @RequestMapping(method = RequestMethod.POST, value = ComplexSearchController.SEARCH_DATAOBJECTS_ATTRIBUTES)
+    @ResourceAccess(description = "Get common model attributes associated to data objects results of the given request",
+            role = DefaultRole.PUBLIC)
+    public ResponseEntity<Set<AttributeModel>> searchDataobjectsAttributes(@RequestBody SearchRequest searchRequest,
+            @RequestHeader HttpHeaders headers) throws SearchException, ModuleException {
+        List<String> modelNames = searchService
+                .retrieveEnumeratedPropertyValues(dispatcher.computeComplexCriterion(searchRequest),
+                                                  SearchType.DATAOBJECTS, AttributeHelper.MODEL_ATTRIBUTE, 100, null);
+        return ResponseEntity.ok(attributeHelper.getAllCommonAttributes(modelNames));
     }
 
     @Override
-    public Resource<EntityFeature> toResource(EntityFeature entity, Object... extras) {
+    public EntityModel<EntityFeature> toResource(EntityFeature entity, Object... extras) {
         return resourceService.toResource(entity);
     }
 }
