@@ -38,6 +38,8 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
 import feign.Response;
+import fr.cnes.regards.framework.authentication.IAuthenticationResolver;
+import fr.cnes.regards.framework.feign.ResponseStreamProxy;
 import fr.cnes.regards.framework.feign.security.FeignSecurityManager;
 import fr.cnes.regards.framework.module.rest.exception.ModuleException;
 import fr.cnes.regards.framework.security.annotation.ResourceAccess;
@@ -80,6 +82,9 @@ public class CatalogDownloadController {
     @Autowired
     protected ICatalogSearchService searchService;
 
+    @Autowired
+    private IAuthenticationResolver authResolver;
+
     /**
      * Download a file that user has right to
      * @param aipId aip id where is the file
@@ -94,14 +99,21 @@ public class CatalogDownloadController {
             @PathVariable(CHECKSUM_PATH_PARAM) String checksum) throws ModuleException, IOException {
         UniformResourceName urn = UniformResourceName.fromString(aipId);
         if (this.searchService.hasAccess(urn)) {
-            FeignSecurityManager.asSystem();
+            // To download through storage client we must be authenticate as user in order to
+            // impact the download quotas, but we upgrade the privileges so that the request passes.
+            FeignSecurityManager.asUser(authResolver.getUser(), DefaultRole.PROJECT_ADMIN.name());
+            Response response = null;
             try {
-                Response response = storageRestClient.downloadFile(checksum);
+                response = storageRestClient.downloadFile(checksum);
                 InputStreamResource isr = null;
                 if (response.status() == HttpStatus.OK.value()) {
-                    isr = new InputStreamResource(response.body().asInputStream());
+                    isr = new InputStreamResource(new ResponseStreamProxy(response));
                 } else {
                     LOGGER.error("Error downloading file {} from storage", checksum);
+                    // if body is not null, forward the error content too
+                    if (response.body() != null) {
+                        isr = new InputStreamResource(new ResponseStreamProxy(response));
+                    }
                 }
                 HttpHeaders headers = new HttpHeaders();
                 for (Entry<String, Collection<String>> h : response.headers().entrySet()) {

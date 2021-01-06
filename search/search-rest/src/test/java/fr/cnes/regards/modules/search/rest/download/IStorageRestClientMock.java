@@ -1,65 +1,60 @@
 package fr.cnes.regards.modules.search.rest.download;
 
-import java.nio.charset.Charset;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import feign.Request;
+import feign.Request.Body;
+import feign.Response;
+import fr.cnes.regards.modules.storage.client.FileReferenceEventDTO;
+import fr.cnes.regards.modules.storage.client.FileReferenceUpdateDTO;
+import fr.cnes.regards.modules.storage.client.IStorageFileListener;
+import fr.cnes.regards.modules.storage.client.IStorageRestClient;
+import fr.cnes.regards.modules.storage.domain.database.DefaultDownloadQuotaLimits;
+import fr.cnes.regards.modules.storage.domain.database.UserCurrentQuotas;
+import fr.cnes.regards.modules.storage.domain.dto.StorageLocationDTO;
+import fr.cnes.regards.modules.storage.domain.dto.quota.DownloadQuotaLimitsDto;
 import org.springframework.context.annotation.Primary;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import feign.Request;
-import feign.Request.Body;
-import feign.Response;
-import fr.cnes.regards.modules.storage.client.IStorageFileListener;
-import fr.cnes.regards.modules.storage.client.IStorageRestClient;
-import fr.cnes.regards.modules.storage.client.RequestInfo;
-import fr.cnes.regards.modules.storage.domain.database.FileReference;
-import fr.cnes.regards.modules.storage.domain.dto.StorageLocationDTO;
+import javax.validation.Valid;
+import java.nio.charset.Charset;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Primary
 @Service
 public class IStorageRestClientMock implements IStorageRestClient, IStorageFileListener {
 
     @Override
-    public void onFileStored(String checksum, String storage, Collection<String> owners,
-            Collection<RequestInfo> requestInfos) {
-        // TODO Auto-generated method stub
+    public void onFileStored(List<FileReferenceEventDTO> stored) {
 
     }
 
     @Override
-    public void onFileStoreError(String checksum, String storage, Collection<String> owners,
-            Collection<RequestInfo> requestInfos, String errorCause) {
-        // TODO Auto-generated method stub
+    public void onFileStoreError(List<FileReferenceEventDTO> storedError) {
 
     }
 
     @Override
-    public void onFileAvailable(String checksum, Collection<RequestInfo> requestInfos) {
-        // TODO Auto-generated method stub
+    public void onFileAvailable(List<FileReferenceEventDTO> available) {
 
     }
 
     @Override
-    public void onFileNotAvailable(String checksum, Collection<RequestInfo> requestInfos, String errorCause) {
-        // TODO Auto-generated method stub
+    public void onFileNotAvailable(List<FileReferenceEventDTO> availabilityError) {
 
     }
 
     @Override
-    public void onFileDeleted(String checksum, String storage, String owner, Collection<RequestInfo> requestInfos) {
-        // TODO Auto-generated method stub
+    public void onFileDeletedForOwner(String owner, List<FileReferenceEventDTO> deletedForThisOwner) {
 
     }
 
     @Override
-    public void onFileUpdated(String checksum, String storage, FileReference updateFile) {
-        // TODO Auto-generated method stub
+    public void onFileUpdated(List<FileReferenceUpdateDTO> updatedReferences) {
 
     }
 
@@ -93,4 +88,48 @@ public class IStorageRestClientMock implements IStorageRestClient, IStorageFileL
         return null;
     }
 
+    @Override
+    public ResponseEntity<DefaultDownloadQuotaLimits> getDefaultDownloadQuotaLimits() {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<DefaultDownloadQuotaLimits> changeDefaultDownloadQuotaLimits(@Valid DefaultDownloadQuotaLimits newDefaults) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<DownloadQuotaLimitsDto> getQuotaLimits(String userEmail) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<DownloadQuotaLimitsDto> upsertQuotaLimits(String userEmail, @Valid DownloadQuotaLimitsDto quotaLimits) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<List<DownloadQuotaLimitsDto>> getQuotaLimits(String[] userEmails) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<DownloadQuotaLimitsDto> getQuotaLimits() {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<UserCurrentQuotas> getCurrentQuotas() {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<UserCurrentQuotas> getCurrentQuotas(String userEmail) {
+        return null;
+    }
+
+    @Override
+    public ResponseEntity<List<UserCurrentQuotas>> getCurrentQuotasList(String[] userEmails) {
+        return null;
+    }
 }
